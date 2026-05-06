@@ -1,0 +1,13 @@
+# Compilation files
+*.o
+*.exe
+*.a
+*.lib
+source/cloudy.exe
+source/import_*
+
+# Output files
+*.log
+*.pnt
+*.bak
+data/
