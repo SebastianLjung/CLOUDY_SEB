@@ -1,0 +1,81 @@
+title typical input stream
+set punch prefix "Balmertest_age0_col18_5"
+table star "data/BPASSv2.2.1_imf135_100_burst_binary.ascii" age=1e6 -1.8
+#blackbody 5e4 K #5e4 K 
+luminosity log solar = 5 #4 #5
+#abundances "primordial.abn" 
+abundances all -20
+#element helium off
+radius 17
+#set dr linear 1.0e15 # 1.0e15
+set nend 10000
+hden 2
+#filling factor = 1.0
+#abundances hii no grains
+constant temperature = 1e4 K #1e4 K
+#stop zone 1 #set nend 1 # Limit to single zone
+#CMB
+#COSMIC RAY BACKGROUND
+#covering factor 1.0 linear
+sphere
+#database H-like collisional ionization off
+iterate to convergence
+stop column density neutral 18.5 #18 #18
+#stop column density ionized 30
+#stop ionized column density 21
+set continuum resolution 0.3 #0.2
+set save line width suppress
+#set save line width suppress
+#database H-like levels print
+element lithium off
+element beryllium off
+element boron off
+element fluorine off
+element phosphorus off
+element chlorine off
+element potassium off
+element scandium off
+element titanium off
+element vanadium off
+element chromium off
+element manganese off
+element cobalt off
+element copper off
+element zinc off
+#database H-like levels resolved 30 element hydrogen
+#database H-like levels collapse 50 element hydrogen
+#database H-like Lyman extra 200 element hydrogen
+#database H-like levels large element hydrogen
+#database H-like collisions thermal hydrogen
+save line labels ".labeline"
+#print line faint -3
+save last line list absolute ".Hlines" "linelist.dat"
+#set save line width suppress
+save last radius ".rad"
+save last continuum ".cont" # save last continuum ".cont"
+#save line list "linelist.dat" "linesout.txt" #"linesout.txt" "linesin.txt"
+#save lines ".Hline" 
+#H  1 6562.80A   
+#H  1 4861.36A   
+#H  1 4340.49A   
+#H  1 4101.76A   
+#H  1 1215.67A
+#end
+save last physical conditions ".phy"
+save last overview ".ovr"
+save last heating ".heat"
+save last cooling ".cool"
+save last optical depth ".opd"
+save last element hydrogen ".ele_H"
+save last element helium ".ele_He"
+save last element carbon ".ele_C"
+save last element nitrogen ".ele_N"
+save last element oxygen ".ele_O"
+save last two photon continuum ".twophoton"
+save last ionising continuum ".ioncont"
+#save last continuum emissivity units angstrom 910 ".emi"
+#save last gammas element hydrogen 1 0 ".gammaH1"
+#save last gammas element hydrogen ".gammaH"
+#save gaunt factors element hydrogen ".gauntH"
+save recombination coefficients element hydrogen ".recomb"
+save hydrogen populations ".Hpop"

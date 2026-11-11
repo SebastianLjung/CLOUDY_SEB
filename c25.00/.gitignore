@@ -1,0 +1,55 @@
+.*
+!.gitignore
+*.o
+*.lo
+*.a
+*.so
+*~
+\#*\#
+*.dep
+*.gch
+# LaTeX temporary files
+*.aux
+*.log
+*.bbl
+*.blg
+*.lof
+*.lot
+*.out
+*.toc
+*.exe
+#
+# 20 12 21 Gary add
+data/cdms+jpl/convert_calpgm.dSYM/
+docs/latex/QuickStart/QuickStart.pdf
+docs/latex/QuickStart/QuickStart.synctex.gz
+docs/latex/hazy1/hazy1.pdf
+docs/latex/hazy1/hazy1.synctex.gz
+docs/latex/hazy2/hazy2.pdf
+docs/latex/hazy2/hazy2.synctex.gz
+docs/latex/hazy3/hazy3.pdf
+docs/latex/hazy3/hazy3.synctex.gz
+# these are the stellar SEDs
+data/*.ascii
+# these three directories are symbolic links
+# of the tsuite directory.  I run the test
+# suite with the gcc, llvm, and intel compilers
+# in each.  The resulting output does not appear
+# in the tsuite subfolders as a set of 
+# untracked files
+gtsuite
+ltsuite
+itsuite
+tfile
+source/lib
+
+/Basu_tutorial/
+/cloudy_plots/
+/eCMa/
+/runs/
+/data/
+__pycache__/
+/source/Gasbox_xgrid_nomol*/
+!/source/Gasbox_xgrid/
+/source/Gasbox_xgrid/*
+!/source/Gasbox_xgrid/*.py

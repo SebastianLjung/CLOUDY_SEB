@@ -1,0 +1,49 @@
+title typical input stream
+set punch prefix "Balmertest_col15"
+blackbody 5e4 K #5e4 K 
+luminosity log solar = 5
+#abundances "primordial.abn" 
+abundances all -20
+#element helium off
+radius 17
+#set dr linear 1.0e15
+hden 2
+#filling factor = 1.0
+#abundances hii no grains
+constant temperature = 1e4 K
+#stop zone 1 #set nend 1 # Limit to single zone
+#CMB
+#COSMIC RAY BACKGROUND
+#covering factor 1.0 linear
+#sphere
+#database H-like collisional ionization off
+iterate to convergence
+stop column density neutral 15 #18
+set continuum resolution 0.2
+#set save line width suppress
+database H-like levels print
+#database H-like levels resolved 30 element hydrogen
+#database H-like levels collapse 50 element hydrogen
+#database H-like Lyman extra 200 element hydrogen
+#database H-like levels large element hydrogen
+#database H-like collisions thermal hydrogen
+save last radius ".rad"
+save last continuum ".cont" # save last continuum ".cont"
+save last physical conditions ".phy"
+save last overview ".ovr"
+save last heating ".heat"
+save last cooling ".cool"
+save last optical depth ".opd"
+save last element hydrogen ".ele_H"
+save last element helium ".ele_He"
+save last element carbon ".ele_C"
+save last element nitrogen ".ele_N"
+save last element oxygen ".ele_O"
+save last two photon continuum ".twophoton"
+save last ionising continuum ".ioncont"
+save last continuum emissivity units angstrom 910 ".emi"
+save last gammas element hydrogen 1 0 ".gammaH1"
+#save last gammas element hydrogen ".gammaH"
+save gaunt factors element hydrogen ".gauntH"
+save recombination coefficients element hydrogen ".recomb"
+save hydrogen populations ".Hpop"

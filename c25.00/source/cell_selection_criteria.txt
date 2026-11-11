@@ -1,0 +1,169 @@
+CELL SELECTION FOR THE CLOUDY HII-REGION MODELS OF SPHINX20 HALOES
+====================================================================
+Source of truth: CLOUDY_TEST/c25.00/source/plot_SPHINXHIIs.py, sections "BPASS: Q(H) OF EVERY STAR" and
+"CELL SELECTION" (parameters at the top of the file, "KEY PARAMETERS TO CHANGE").
+Written 2026-11-06 for the settings in the file at that date. If the two disagree, the script wins.
+
+Purpose: plot_SPHINXHIIs.py models, with Cloudy, the gas cells of a halo that hold star particles, one model per
+cell. Most star-hosting cells do not need a model: the rules below decide which do. This file describes the rules
+so that they can be applied while extracting a halo from the simulation, keeping only the cells (and their star
+particles) that will be modelled.
+
+
+1. INPUTS PER HALO (as currently extracted by extract_halo_cells.py)
+--------------------------------------------------------------------
+gas_cells.npz, one entry per AMR leaf cell of the halo:
+  nH           [cm^-3]   hydrogen number density
+  xHII         [-]       H ionised fraction (SPHINX)
+  TK           [K]       temperature
+  ne           [cm^-3]   electron density           (not used by the selection)
+  metallicity  [-]       metal mass fraction        (used by the Cloudy decks, not the selection)
+  xHeII, xHeIII          (not used by the selection)
+  cell_pos     [box units, 0-1]  cell centre (x, y, z)
+  cell_l       [-]       AMR level; cell side in box units = 0.5**cell_l
+  cell_dx      [cm]      cell side (proper)
+stars.npz, one entry per star particle:
+  pos          [box units]  position
+  star_age     [yr]
+  star_met     [-]       metal mass fraction
+  star_minit   [1e11 Msun]  initial mass (multiply by 1e11 for Msun)
+  mass, galaxy_index     (not used)
+halo_info.json: 'redshift' (used by the Cloudy decks for the CMB).
+
+
+2. CONSTANTS
+------------
+T_ION     = 1e4 K                   temperature of ionised gas in the Stromgren estimate
+Y_He      = 10**-1.103 = 0.0789     He/H by number (as in the Cloudy decks)
+R_eq_cube = (3/(4 pi))**(1/3) = 0.6204   radius of the sphere with the volume of a cube of side 1
+alpha_B(T) [cm^3 s^-1], case-B H recombination (Hui & Gnedin 1997):
+    lam = 315614.0 / T
+    alpha_B = 2.753e-14 * lam**1.5 / (1 + (lam / 2.74)**0.407)**2.242      (alpha_B(1e4 K) = 2.59e-13)
+pc = 3.086e18 cm, h = 6.62607e-27 erg s, c = 2.99792458e10 cm/s, lambda_912 = 911.2671 Ang
+
+
+3. PARAMETERS (current values)
+------------------------------
+XHII_TRUST      = 1.0           cells with x_HII >= this are trusted as ionised
+N_HI_THIN       = 1e15 cm^-2    cells with N_HI_min below this are trusted as ionised
+N_HI_MAX        = 3e20 cm^-2    cells with N_HI_min above this are optically thick
+STROMGREN_RANGE = (0.8, 1.2)    allowed range of x_HII / x_S
+Q_FRAC          = 0.98          the faintest candidate cells, together holding < (1 - Q_FRAC) of the halo's
+                                stellar Q(H), are left out (Q_MIN is set per halo from this)
+EXTRA_CELLS     = []            cells forced into the model list by hand (none at present; ignore)
+
+
+4. STEP A: HOST CELL OF EVERY STAR (must be done with ALL the halo's cells and stars)
+-------------------------------------------------------------------------------------
+With AMR the nearest cell centre is not always the cell that contains a star, so the 8 nearest centres are
+checked and the one whose cube contains the star is used:
+    _, nearest = cKDTree(cell_pos, leafsize=100).query(star_pos, k=8)
+    half_dx = 0.5 * 0.5**cell_l[nearest]                                   # box units
+    inside = np.all(np.abs(star_pos[:, None, :] - cell_pos[nearest]) <= half_dx[..., None], axis=2)
+    star_in_cell = inside.any(axis=1)                                      # False: star outside all extracted cells
+    star_cell = nearest[np.arange(len(star_pos)), np.argmax(inside, axis=1)]
+Stars with star_in_cell == False are dropped (halo 997: 525 of 702,907).
+
+
+5. STEP B: Q(H) OF EVERY STAR (BPASS)
+-------------------------------------
+Grid: CLOUDY_TEST/c25.00/data/bpass_sphinx.ascii (Cloudy's BPASS grid; L_lambda [erg/s/Ang] per Msun on a
+(Z, age) grid; ages 1e6-1e11 yr, Z 1e-5-0.04). Reader: load_bpass() in plot_SPHINXHIIs.py.
+  - q(Z, age) [photons/s/Msun] = trapz over lambda <= 911.2671 Ang of L_lambda * lambda * 1e-8 / (h c)
+  - interpolate log10 q linearly in (log10 Z, log10 age) (scipy RegularGridInterpolator), with
+      log10 Z   clipped to [-5.00, -1.40]
+      log10 age clipped to [log10 1e6, log10 1e11]   (stars younger than 1 Myr get the 1 Myr value)
+  - Q_star = 10**interp(logZ, logage) * star_minit[Msun]
+Per cell: Q_cell = sum of Q_star of its stars; N_star = number of stars (step A, star_in_cell only).
+Q_tot = Q_cell.sum() = the halo's stellar Q(H) (halo 997: 1.50e53 s^-1).
+
+
+6. STEP C: PER-CELL QUANTITIES
+------------------------------
+    V_cell    = cell_dx**3                                              [cm^3]
+    R_out     = R_eq_cube * cell_dx                                     [cm] sphere with the cell's volume
+    N_target  = nH * V_cell                                             H atoms in the cell
+    N_HI_min  = nH * (1 - xHII) * R_out                                 [cm^-2] neutral column (see note 1)
+    N_ion_max = sqrt(Q_cell * V_cell / ((1 + Y_He) * alpha_B(T_ION)))   H atoms the cell's stars can keep ionised
+                                                                        (Stromgren: Q = alpha_B n_e n_p V, uniform)
+    crit      = N_ion_max / N_target                                    > 1: stars could ionise the whole cell
+    x_S       = min(crit, 1)                                            Stromgren ionised fraction of the cell
+    ratio     = xHII / x_S                                              (cells without stars: x_S = 0 -> inf/nan;
+                                                                         they are excluded by has_stars anyway)
+
+
+7. STEP D: THE RULES, IN THIS ORDER (each cell gets exactly one category)
+--------------------------------------------------------------------------
+    has_stars     = N_star > 0
+    ionised       = (xHII >= XHII_TRUST) | (N_HI_min < N_HI_THIN)          -> TRUSTED, f_esc = 1, not modelled
+    thick         = N_HI_min > N_HI_MAX                                    -> THICK, f_esc = 0, not modelled
+    off_stromgren = (ratio > STROMGREN_RANGE[1]) | (ratio < STROMGREN_RANGE[0])
+                    ratio > 1.2: ionised beyond what the cell's own stars can do (photons from outside the cell)
+                    ratio < 0.8: less ionised than the stars would make it in equilibrium
+                                                                           -> OFF-STROMGREN, not modelled; f_esc
+                                                                              0 or exp(-6.3e-18 N_HI_min)
+    candidates    = has_stars & ~ionised & ~thick & ~off_stromgren
+    # per-halo Q(H) cut: leave out the faintest candidates while their summed Q(H) stays within
+    # (1 - Q_FRAC) of the WHOLE HALO's Q(H) (not of the candidates' Q(H))
+    Q_sorted = np.sort(Q_cell[candidates])                                 # faintest first
+    n_faint  = np.searchsorted(np.cumsum(Q_sorted), (1 - Q_FRAC) * Q_tot, side='right')
+    Q_MIN    = Q_sorted[n_faint - 1] if n_faint > 0 else 0.
+    faint         = Q_cell <= Q_MIN                                        -> FAINT, left out (f_esc unknown)
+    selected      = candidates & ~faint                                    -> MODELLED WITH CLOUDY
+
+The order matters: a cell that is both "ionised" and "thick" (impossible with these values) or both "thick" and
+"off_stromgren" is counted in the first category it meets. Q_MIN must be computed AFTER the other rules and from
+the halo's total Q(H), so it needs every star of the halo, not just the selected ones.
+
+
+8. WHAT TO PASS ON FOR CLOUDY PROCESSING
+----------------------------------------
+plot_SPHINXHIIs_filtered.py models every cell it is given, so it needs these files in the halo folder:
+  gas_cells_filtered.npz   one entry per cell with selected == True:
+      cell_index   index of the cell in the full halo extraction (gas_cells.npz order). Names the model folders
+                   (cell_0746194, ...), so models made by plot_SPHINXHIIs.py are found and reused
+      nH, xHII, TK, metallicity, cell_dx   (required; same units as gas_cells.npz)
+      ne, xHeII, xHeIII, cell_pos, cell_l  (optional, not used)
+  stars_filtered.npz       every star particle in those cells (star_in_cell == True and host in the selection):
+      host_cell    cell_index of the cell that contains the star (step A)
+      star_age, star_met, star_minit       (required; same units as stars.npz)
+      pos, mass, galaxy_index              (optional, not used)
+  halo_info.json           'redshift'
+Example: halo 997 with the parameters of section 3 gives 84 cells and 4,559 stars.
+For the halo totals (so the halo f_esc can be put together without the full extraction):
+  - Q_tot, Q_MIN, and per category (trusted, thick, off-Stromgren over / under, faint, selected):
+    number of cells and summed Q_cell
+  - for the off-Stromgren cells: sum of Q_cell * exp(-6.3e-18 * N_HI_min), if their f_esc is taken from SPHINX
+  - ideally a small per-cell table of ALL star-hosting cells: cell index, Q_cell, N_star, xHII, N_HI_min, crit,
+    category. Then the rules can be re-applied with other parameter values without a new extraction.
+(plot_SPHINXHIIs.py, by contrast, reads the full gas_cells.npz / stars.npz and applies the rules itself.)
+
+
+9. REFERENCE NUMBERS FOR CHECKING (halo 997, timestep 279, z = 6.002, current parameters)
+----------------------------------------------------------------------------------------
+2,765,095 cells; 702,907 stars (702,382 placed in a cell); Q_tot = 1.50e53 s^-1; smallest cell 10.87 pc
+                                              cells    share of Q_tot
+  cells with stars                           297,335       1.000
+  trusted (x_HII >= 1 or N_HI_min < 1e15)    106,393       0.190
+     of which x_HII >= 1                      47,688       0.142
+  thick (N_HI_min > 3e20)                     33,239       0.495
+  off-Stromgren (ratio outside 0.8-1.2)      119,683       0.011
+     ratio > 1.2                              68,368       0.008
+     ratio < 0.8                              51,315       0.003
+  faint (Q_cell <= Q_MIN = 3.02e49 s^-1)      37,936       0.020
+  selected for Cloudy                             84       0.284    (4,559 star particles)
+Other Q_FRAC values (same other parameters): 0.99 -> Q_MIN 7.25e48, 183 cells, 0.294 of Q_tot.
+
+
+10. NOTES AND CAVEATS
+---------------------
+1. N_HI_min = nH (1 - x_HII) R_out is the column of a uniform cell, centre to R_out. It is 3x the thin-shell
+   column N_target (1 - x_HII) / (4 pi R_out^2) that an older comment in plot_SPHINXHIIs.py described. The
+   thresholds N_HI_THIN and N_HI_MAX were chosen with the uniform version: use it.
+2. Which cells are lost when the rules are tightened was tested on halo 997 only (631 Cloudy models): the
+   off-Stromgren cells have Cloudy f_esc ~0-0.02 and the faint ones ~0.5. Check the category shares of each new
+   halo against section 9 before trusting the thresholds.
+3. The faint cells' f_esc is unknown (0-1), so the faint cut can change the halo f_esc by at most (1 - Q_FRAC)
+   (absolute): 0.02 with Q_FRAC = 0.98.
+4. T_ION, Y_He and the BPASS treatment must match plot_SPHINXHIIs.py exactly, or crit, x_S and Q_MIN will differ.
+5. CRIT_RANGE in the script is only printed (near-critical cells), not used to select.
